@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Tool, User, Transaction } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
@@ -29,6 +29,28 @@ const DashboardView: React.FC<DashboardViewProps> = ({ tools, users, transaction
   ];
 
   const COLORS = ['#10b981', '#f59e0b', '#ef4444'];
+
+  // Ordenação personalizada: 'Em Uso' primeiro (por tempo de retirada), 'Disponível' depois.
+  const sortedTools = useMemo(() => {
+    return [...tools].sort((a, b) => {
+      // Prioridade 1: 'checked_out' (Em Uso) no topo
+      if (a.status === 'checked_out' && b.status !== 'checked_out') return -1;
+      if (a.status !== 'checked_out' && b.status === 'checked_out') return 1;
+
+      // Prioridade 2: Se ambas estão em uso, ordena pela data de retirada (mais antiga primeiro)
+      if (a.status === 'checked_out' && b.status === 'checked_out') {
+        const transA = transactions.find(t => t.toolId === a.id && t.status === 'pending');
+        const transB = transactions.find(t => t.toolId === b.id && t.status === 'pending');
+        return (transA?.checkoutTime || 0) - (transB?.checkoutTime || 0);
+      }
+
+      // Prioridade 3: Se nenhuma está em uso, mantém 'available' acima de 'maintenance' se houver
+      if (a.status === 'available' && b.status === 'maintenance') return -1;
+      if (a.status === 'maintenance' && b.status === 'available') return 1;
+
+      return 0;
+    });
+  }, [tools, transactions]);
 
   const handleAction = () => {
     if (selectedTool && selectedUser) {
@@ -106,22 +128,28 @@ const DashboardView: React.FC<DashboardViewProps> = ({ tools, users, transaction
 
         {/* Real-time Status List */}
         <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-          <h3 className="text-lg font-bold text-slate-800 mb-6">Estado das Ferramentas</h3>
+          <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center justify-between">
+            <span>Estado das Ferramentas</span>
+            <span className="text-[10px] text-slate-400 font-normal uppercase tracking-wider">Ordenado por Retirada</span>
+          </h3>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="text-left">
                 <tr className="border-b border-slate-100 text-slate-400 text-xs font-semibold uppercase tracking-wider">
                   <th className="pb-4">Ferramenta</th>
                   <th className="pb-4">Status</th>
-                  <th className="pb-4">Usuário Atual</th>
+                  <th className="pb-4">Usuário</th>
+                  <th className="pb-4">Retirada</th>
                   <th className="pb-4">Ação</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {tools.map(tool => {
+                {sortedTools.map(tool => {
                   const currentUser = users.find(u => u.id === tool.currentUserId);
+                  const activeTransaction = transactions.find(t => t.toolId === tool.id && t.status === 'pending');
+                  
                   return (
-                    <tr key={tool.id} className="text-sm">
+                    <tr key={tool.id} className={`text-sm transition-colors ${tool.status === 'checked_out' ? 'bg-amber-50/30' : ''}`}>
                       <td className="py-4">
                         <div className="font-medium text-slate-900">{tool.name}</div>
                         <div className="text-xs text-slate-500">{tool.code} • {tool.category}</div>
@@ -142,6 +170,18 @@ const DashboardView: React.FC<DashboardViewProps> = ({ tools, users, transaction
                               {currentUser.name.charAt(0)}
                             </div>
                             {currentUser.name}
+                          </div>
+                        ) : '—'}
+                      </td>
+                      <td className="py-4 text-slate-500 text-xs">
+                        {activeTransaction ? (
+                          <div className="flex flex-col">
+                            <span className="font-medium text-slate-700">
+                              {new Date(activeTransaction.checkoutTime).toLocaleDateString('pt-BR')}
+                            </span>
+                            <span>
+                              às {new Date(activeTransaction.checkoutTime).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
                           </div>
                         ) : '—'}
                       </td>
