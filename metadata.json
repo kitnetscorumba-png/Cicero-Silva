@@ -1,0 +1,5 @@
+{
+  "name": "ToolFlow Manager",
+  "description": "A professional tool inventory and lending system for industrial shifts, featuring user management, tool tracking, and AI-generated shift reports.",
+  "requestFramePermissions": []
+}
